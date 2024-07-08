@@ -56,6 +56,7 @@ function read_instance(file_path)
     return n, m, delivery_points, arcs, costs
     end
 end
+
 #testing the task on this file
 file_path = "instances/inst_n-20_m-5_1.txt"
 test_file = read_instance(file_path)
@@ -65,7 +66,6 @@ test_file = read_instance(file_path)
 #getting the data needed in order to solve this constraint
 
 n, m, Q, arcs, costs = read_instance(file_path)
-nodes = 1:n
 #generating the data needed to solve the problem
 predecessors = Vector{Vector{Int64}}(undef,n)
 successors = Vector{Vector{Int64}}(undef, n)
@@ -87,7 +87,7 @@ function solve_ILP(n::Int64, Q::Vector{Int64}, arcs::Vector{Vector{Int64}}, pred
     model = Model(CPLEX.Optimizer)
     set_silent(model)
     #Decision Variable
-    @variable(model, x[1:n, 1:n], Int)#here we already fullfill constraint 5
+    @variable(model, x[1:n, 1:n] >= 0, Int)#here we already fullfill constraint 5
 
     #objective function
     #we want to minimize the total costs
@@ -99,24 +99,80 @@ function solve_ILP(n::Int64, Q::Vector{Int64}, arcs::Vector{Vector{Int64}}, pred
     # each location which has to be visited is visited at leaste once
     @constraint(model, [v in Q], sum(x[i, v] for i in pred[v]) >= 1)
 
-    optimize!(model)
+    #optimize!(model)
 
-    termination_status = JuMP.termination_status(model)
-    primal_status = JuMP.primal_status(model)
+    # termination_status = JuMP.termination_status(model)
+    # println("Termination status: ", termination_status)
 
-    println("Termination status: ", termination_status)
-    println("Primal status: ", primal_status)
-
-    if termination_status != MOI.OPTIMAL
-        println("The solver did not find an optimal solution.")
-        return nothing
-    end
-    #print(objective_value(model))
-  return value.(x)
+    # if termination_status != MOI.OPTIMAL
+    #     println("The solver did not find an optimal solution.")
+    #     return nothing
+    # end
+    # print(objective_value(model))
+  return model
 end
 solve_ILP(n, Q, arcs, predecessors, successors, costs)
-for arc in arcs
-    i, j = arc
-    println(i)
-    println(j)
+
+# ###################################################################################################
+#           computeTour
+#
+# Compute the tour starting at startLocation in the optimal solution of the model.
+#
+# input:
+# - model: JuMP model for the TSP
+# - startLocation: location where the tour starts
+#
+# output:
+# - Sequence of locations visited.
+# ###################################################################################################
+
+function computeTour(model::Model, startLocation::Int64)
+    optimize!(model)
+    xopt = round.(Int64,value.(model[:x])) # we retrieve the optimal x
+    tour = [startLocation] # we initialize the tour with the start location
+    
+    # iteration 1
+    currentLocation = startLocation
+    nextLocation = findfirst(!isequal(0), xopt[currentLocation,:])
+    push!(tour, nextLocation)
+
+    # fill the rest of the tour
+    while nextLocation != startLocation
+        currentLocation = nextLocation
+        nextLocation = findfirst(!isequal(0), xopt[currentLocation,:])
+        push!(tour, nextLocation)
+    end
+
+    return tour
 end
+
+function connect_solution(model::Model, Q::Vector{Int64}, n::Int64, succ::Vector{Vector{Int64}})
+    #solve the problem
+    print("Optimiiiiiiiiiiiiert!")
+    all_tours = Vector{Vector{Int64}}()
+    subtour_detected = true
+    while subtour_detected
+        #set all nodes to unvisited again 
+        visited = falses(n)
+        subtour_detected = false
+        for i in Q
+            if !visited[i]
+                sub = computeTour(model, i)
+                push!(all_tours, sub)
+                for j in sub[1:end-1]
+                    visited[j] = true
+                end
+                if !all(in(sub), Q)
+                     @constraint(model, [i in sub[1:end-1]], sum(model[:x][i, j] for j in succ[i] if !(j in sub[1:end-1])) >= 1) 
+                     subtour_detected = true
+                end
+            end
+        end
+        
+    end
+    
+    return all_tours[end]
+end
+model = solve_ILP(n, Q, arcs, predecessors, successors, costs)
+current_solution = connect_solution(model, Q, n, successors)
+
