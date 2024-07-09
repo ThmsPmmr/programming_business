@@ -175,7 +175,7 @@ end
 G = Graph(n, successors, predecessors, costs)
 
 
-function computeShortestPath(G::Graph, Q, m)
+function computeShortestPath(G::Graph, Q::Vector, m::Int64)
     d = zeros(m,m)
     for i in 1:length(Q) 
         for j in 1:length(Q)
@@ -230,7 +230,7 @@ function addConnectivityCut(model::Model, tour::Vector, n::Int64)
 
 end
 
-function connectivityCutsAlgorithm(model::Model, n::Int64, startLocation::Int64, Q)
+function connectivityCutsAlgorithm(model::Model, n::Int64, startLocation::Int64, Q::Vector)
     # List to store all subtours
     sub = []
     # Flag to indicate whether subtours are detected
@@ -307,11 +307,3 @@ tsp = buildTSPmodel(m, d, startLocation)
 # call to the cutting plane algorithm
 @time connectivityCutsAlgorithm(tsp, m, startLocation, Q)
 
-
-tour1 = [1,4,3,2,5,1]
-
-for node in tour1
-    
-    println(Q[node])
-    
-end
