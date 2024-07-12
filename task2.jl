@@ -4,54 +4,10 @@ using DelimitedFiles
 using CPLEX
 using JuMP
 
-function read_instance(file_path)
-    open(file_path, "r") do f
-        n = parse(Int64, readline(f))
-        m = parse(Int64, readline(f))
-        delivery_points = parse.(Int64, split(readline(f)))
-        arcs = Vector{Vector{Int64}}()
-        costs = zeros(Float64, n, n)
-        while !eof(f)
-            linei = split(readline(f))
-            i  = parse(Int64, linei[1])
-            j  = parse(Int64, linei[2])
-            c  = parse(Float64, linei[3])
-            push!(arcs, [i,j])
-            costs[i, j] = c
-        end
-        
-        close(f)
-    return n, m, delivery_points, arcs, costs
-    end
-end
-
-
-file_path = "instances/inst_n-20_m-5_1.txt"
-
-
-n, m, Q, arcs, costs = read_instance(file_path)
-
-
+include("read_instance.jl")
 
 
 ####################################### Step 1 ##############################################
-
-
-#generating the data needed to solve the problem
-predecessors = Vector{Vector{Int64}}(undef,n)
-successors = Vector{Vector{Int64}}(undef, n)
-
-for i in 1:n
-    predecessors[i] = Vector{Int64}(undef, 0)
-    successors[i] = Vector{Int64}(undef, 0)
-end
-
-
-for arc in arcs
-    pre, suc = arc
-    push!(predecessors[suc], pre)
-    push!(successors[pre], suc)
-end
 
 mutable struct Graph
     numberNodes::Int64
@@ -72,9 +28,22 @@ mutable struct Label
     explored::Bool
 end
 
-
-
-
+# #################################################################################
+#           findNextNode
+#
+# Finds the node that has the unexplored label with the smallest cost in the graph.
+#
+# input:
+# - G: a graph
+# - L: label for each node (/!\ L[i] is undef if there is no label at node i /!\)
+# - hasLabel: hasLabel[i] is true if there is a label at node i, false otherwise
+#
+# output:
+# - the index of the node with the smallest-cost unexplored label
+#
+# note:
+# - returns -1 if there is no unexplored label in the graph
+# #################################################################################
 function findNextNode(G::Graph, L::Vector{Label}, hasLabel::BitVector)
 
     # initialize the minimum cost
@@ -92,7 +61,20 @@ function findNextNode(G::Graph, L::Vector{Label}, hasLabel::BitVector)
     return minCostLabel
 end
 
-
+# #################################################################################
+#           testConnectivity
+#
+# Test wether there exists a path between origin and destination or not in the
+# graph G.
+#
+# input:
+# - G: a Graph
+# - origin: index of the starting node
+# - destination: index of the destination node
+#
+# output:
+# - true if there exists a path bewteen origin and destination, false otherwise
+# #################################################################################
 function hasPath(G::Graph, origin::Int64, destination::Int64)
 
     # initialization
@@ -123,7 +105,20 @@ function hasPath(G::Graph, origin::Int64, destination::Int64)
 end
 
 
-
+# #################################################################################
+#           DijsktraAlgorithm
+#
+# Calls Dijkstra's algorithm on the given instance of the shortest path SPP.
+# Displays the optimal solution found at the end.
+#
+# input:
+# - SPP: an instance of the shortest path problem
+#
+# note:
+# - this assumes that there exists a path between the origin and the destination
+# - this assumes that there is no negative cycle
+# - this assumes that all costs are positive
+# #################################################################################
 function DijsktraAlgorithm(SPP::ShortestPathProblem)
 
     G = SPP.G # we extract the graph in a new variable for readability
@@ -172,28 +167,59 @@ function DijsktraAlgorithm(SPP::ShortestPathProblem)
 
 end
 
-G = Graph(n, successors, predecessors, costs)
 
-
+# #################################################################################
+#           computeShortestPath
+#
+# Calculates the shortest distance between each pair of delivery locations
+#
+#  input:
+# - G: a Graph
+# - Q: indices of the delivery locations
+# - m: number of delivery locations
+#
+# output:
+# - d: Distance matrix of delivery locations (m x m)
+# #################################################################################
 function computeShortestPath(G::Graph, Q::Vector, m::Int64)
+    #initialize a matrix with only zeros
     d = zeros(m,m)
+
+    #fill the matrix with always the smallest distance between each pair of delivery locations
     for i in 1:length(Q) 
         for j in 1:length(Q)
             if i != j
+                #create shortest Path problem
                 St = ShortestPathProblem(Q[i], Q[j], G)
+                # solve the problem via the Dijkstra Algorithm and fill the distance matrix
                 d[i,j] = DijsktraAlgorithm(St)
             end
         end 
     end
+    #return the distance matrix
     return d
 end
 
 
-d = computeShortestPath(G, Q,m)
-
-
 ########################################### Step 2 ######################################################
 
+
+# ###################################################################################################
+#           buildTSPmodel
+#
+# Build a JuMP model for the TSP without sub-tour constraints.
+#
+# input:
+# - n: number of nodes
+# - d: distance matrix
+# - startLocation: starting location for the tour
+#
+# ouput:
+# - JuMP model for the correspond TSP problem
+#
+# note:
+# - there is no sub-tour constraint
+# ###################################################################################################
 function buildTSPmodel(n::Int64, d::Matrix{Float64}, startLocation::Int64)
 
     # initialize the model
@@ -213,7 +239,16 @@ function buildTSPmodel(n::Int64, d::Matrix{Float64}, startLocation::Int64)
     return model
 end
 
-
+# ###################################################################################################
+#           addConnectivityCut
+#
+# Add the conectivity cut corresponding to the tour provided to the JuMP model.
+#
+# input:
+# - model: JuMP model for the TSP
+# - tour: sequence of locations visited
+# - n: number of delivery locations
+# ###################################################################################################
 function addConnectivityCut(model::Model, tour::Vector, n::Int64)
 
     # check which locations are visited in the tour
@@ -230,6 +265,17 @@ function addConnectivityCut(model::Model, tour::Vector, n::Int64)
 
 end
 
+# ###################################################################################################
+#           connectivityCutsAlgorithm
+#
+# Cutting plane algorithm for the TSP using connectivity cuts. Display the optimal solution
+# when it is found.
+#
+# input:
+# - model: JuMP model for the TSP
+# - startLocation: location where the tour starts
+# - n: number of delivery locations
+# ###################################################################################################
 function connectivityCutsAlgorithm(model::Model, n::Int64, startLocation::Int64, Q::Vector)
     # List to store all subtours
     sub = []
@@ -279,6 +325,18 @@ function connectivityCutsAlgorithm(model::Model, n::Int64, startLocation::Int64,
     println("Total distance traveled: ", objective_value(model))
 end
 
+# ###################################################################################################
+#           computeTour
+#
+# Compute the tour starting at startLocation in the optimal solution of the model.
+#
+# input:
+# - model: JuMP model for the TSP
+# - startLocation: location where the tour starts
+#
+# output:
+# - Sequence of locations visited.
+# ###################################################################################################
 function computeTour(model::Model, startLocation::Int64)
     #we always optimize in each subtour we create
     optimize!(model)
@@ -300,10 +358,25 @@ function computeTour(model::Model, startLocation::Int64)
     return tour
 end
 
-startLocation = m[1]
 
+# main script 
+
+#read in data
+n, m, Q, arcs, costs = read_instance(string("instances/", "inst_n-20_m-5_1.txt"))
+
+#initialize predecessors and successors
+predecessors, successors = create_pre_succesors(n, arcs)
+#set startLocation
+startLocation = Q[1]
+#create Graph regarding our data
+G = Graph(n, successors, predecessors, costs)
+
+#compute shortest paths between each pair of delivery location.
+d = computeShortestPath(G, Q,m)
+
+#build model
 tsp = buildTSPmodel(m, d, startLocation)
 
 # call to the cutting plane algorithm
-@time connectivityCutsAlgorithm(tsp, m, startLocation, Q)
+connectivityCutsAlgorithm(tsp, m, startLocation, Q)
 
