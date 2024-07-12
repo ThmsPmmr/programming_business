@@ -111,26 +111,27 @@ function solve_ILP(n::Int64, Q::Vector{Int64}, arcs::Vector{Vector{Int64}}, pred
     # print(objective_value(model))
   return model
 end
-solve_ILP(n, Q, arcs, predecessors, successors, costs)
+
 
 
 
 ###########find all tours
 
-function find_all_tours(x::Matrix{Float64}, arcs::Vector{Vector{Int64}}, n::Int64)
-    used_arcs = [Vector{Int64}() for _ in 1:n]
+function find_all_tours(x::Matrix{Float64}, arcs::Vector{Vector{Int64}}, n::Int64, Q::Vector{Int64})
+    #first create a matrix which is initialised with false for every element, this describes if an arc is used
+    used_arcs = falses(n,n)
+    #know we set all used arcs to true as this is what we need to get the subtours
     for (i,j) in arcs
         if value(x[i,j]) > 0.5
-            push!(used_arcs[i], j)
+            used_arcs[i,j] = true
         end
     end
-    println(used_arcs)
-
+    #create a function which finds all nodes of the current subtours
     function find_connections(c::Int64, subtour::Vector{Int64})
         push!(subtour, c)
         visited[c] = true
-        for con in used_arcs[c]
-            if !visited[con]
+        for con in 1:n
+            if !visited[con] && used_arcs[c,con]
                 find_connections(con, subtour)
             end
         end        
@@ -138,109 +139,49 @@ function find_all_tours(x::Matrix{Float64}, arcs::Vector{Vector{Int64}}, n::Int6
     #now lets look for the subtours we currently have
     all_components = Vector{Vector{Int64}}()
     visited = falses(n)
-    for u in 1:n
-        if length(used_arcs[u]) >= 1 && !visited[u]
+    #decided to only iterate through delievery points as there are no tours without a node of the delievery points as this would just increase costs
+    #but I if I would exactly look at the explanation of step 3 it would have to be 
+    #for u in 1:n
+    for u in Q
+        if !visited[u] # && any(used_arcs[u, :]) - we would need this if we iterate from 1:n so that it is more efficient
             #for all locations with connections in the current solution we compute the subtours
             subtour = Vector{Int64}(undef,0)
             find_connections(u, subtour)
             push!(all_components, subtour)
         end
     end
-    println(all_components)
+    #we return the vector of all subtours which are also stored in a vector
     return all_components
 end
 
-xopt = value.(model[:x])
-# ###################################################################################################
-#           computeTour
-#
-# Compute the tour starting at startLocation in the optimal solution of the model.
-#
-# input:
-# - model: JuMP model for the TSP
-# - startLocation: location where the tour starts
-#
-# output:
-# - Sequence of locations visited.
-# ###################################################################################################
 
-function computeTour(model::Model, startLocation::Int64)
-    xopt = round.(Int64,value.(model[:x]))
-    println("x", xopt) # we retrieve the optimal x
-    tour = [startLocation] # we initialize the tour with the start location
-    
-    # iteration 1
-    currentLocation = startLocation
-    nextLocation = findfirst(!isequal(0), xopt[currentLocation,:])
-    push!(tour, nextLocation)
-    println("tour: ", tour)
-
-    # fill the rest of the tour
-    while nextLocation != startLocation
-        
-        currentLocation = nextLocation
-        #println("current location: ", currentLocation)
-        nextLocation = findall(!isequal(0), xopt[currentLocation,:])
-        push!(tour, nextLocation)
-        #println("in compute tour", tour)
-    end
-
-    return tour
-end
-
-
-
+#now we need to connect the subtours to one tour which delievers all delievery points
 function connect_solution(model::Model, Q::Vector{Int64}, n::Int64, succ::Vector{Vector{Int64}}, arcs::Vector{Vector{Int64}})
-    all_tours = Vector{Vector{Int64}}()
+    #all_tours = Vector{Vector{Int64}}()
     subtour_detected = true
+    #as long as there is no tour which contains all delievery points we need to add connectivity cuts
     while subtour_detected
-        #all_tours = Vector{Vector{Int64}}()
-        println("vorm optimieren")
+        #we optimize the model every time all connectivity cuts for all subtours had been added
         optimize!(model)
-        println("optimiert")
-        #set all nodes to unvisited again 
-        #visited = falses(n)
     
-
         xopt = value.(model[:x])
-        all_tours = find_all_tours(xopt, arcs, n)
+        #we need to find all current tours
+        all_tours = find_all_tours(xopt, arcs, n, Q)
 
-        # for i in Q
-        #     if !visited[i]
-        #         println("before computing tour")
-        #         sub = computeTour(model, i)
-        #         println("subtour: ", sub)
-        #         println("after computing tour")
-        #         push!(all_tours, sub)
-        #         for j in sub[1:end-1]
-        #             visited[j] = true
-        #         end
-        #         # if !all(in(sub), Q)
-        #         #      @constraint(model, [i in sub[1:end-1]], sum(model[:x][i, j] for j in succ[i] if !(j in sub[1:end-1])) >= 1) 
-        #         #      subtour_detected = true
-        #         # end
-        #     else println(i)
-        #     end
-        # end
-        println("before subtour constraints")
+        #now we either iterate through all subtours or until one subtour contains all delievery points
         for subtour in all_tours
-            println(subtour)
-            if length(subtour) > 1
-                if !all(in(subtour), Q) && subtour_detected
-                    println("herinnen")
-                    @constraint(model, sum(model[:x][i, j] for i in subtour for j in succ[i] if !(j in subtour[1:end])) >= 1) 
-                    subtour_detected = true
-                else subtour_detected = false
-                end
+            #check if all delievery points are in the current subtour
+            if !all(in(subtour), Q) && subtour_detected
+                @constraint(model, sum(model[:x][i, j] for i in subtour for j in succ[i] if !(j in subtour[1:end])) >= 1) 
+                subtour_detected = true
+            else subtour_detected = false
             end
         end
         
     end
-    println("heraussen")
+    #we again optimize the model to get the objective value and fullfill all constraints
     optimize!(model)
-    obj_value = objective_value(model)
-    println("Total distance traveled: ", obj_value)
-    println("Optimal solution found.")
+    println("Total travelling distance: ", objective_value(model))
     
     return(value.(model[:x]))
 end
@@ -248,8 +189,41 @@ model = solve_ILP(n, Q, arcs, predecessors, successors, costs)
 
 println(Q)
 current_solution = connect_solution(model, Q, n, successors, arcs)
-#computeTour(model, Q[1])
 
-for (i,j) in arcs
-    println(i , " ", j)
+
+#task 3
+#want to observe the average time used for the cutting plane which in this case is the connect solution method
+directory = "instances/"
+filenames = readdir(directory)
+filenames[1:10]
+
+total_time = 0.0
+function calc_comp_time_task1(instances::Vector{String} )
+    total_time = 0.0
+    for file in instances
+        n, m, Q, arcs, costs = read_instance(string(directory,file))
+        #generating the data needed to solve the problem
+        predecessors = Vector{Vector{Int64}}(undef,n)
+        successors = Vector{Vector{Int64}}(undef, n)
+        for i in 1:n
+            predecessors[i] = Vector{Int64}(undef, 0)
+            successors[i] = Vector{Int64}(undef, 0)
+        end
+
+
+        for arc in arcs
+            pre, suc = arc
+            push!(predecessors[suc], pre)
+            push!(successors[pre], suc)
+        end
+        model = solve_ILP(n, Q, arcs, predecessors, successors, costs)
+        t = @elapsed connect_solution(model, Q, n, successors, arcs)
+        total_time += t
+    end
+    return total_time / length(instances)
 end
+
+    
+avg_20_inst_task1 = calc_comp_time_task1(filenames[1:10])
+avg_35_inst_task1 = calc_comp_time_task1(filenames[11:20])
+avg_50_inst_task1 = calc_comp_time_task1(filenames[21:30])
