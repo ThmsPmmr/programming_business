@@ -1,85 +1,9 @@
 # Hardcode für die gegebenen Daten
-using Random
-using DelimitedFiles
+
 using CPLEX
 using JuMP
+include("read_instance.jl")
 
-# #read the instance
-# function read_instance_data(file_path)
-
-#     # Lesen des gesamten Inhalts des Files
-#     file_content = readdlm(file_path, ' ')
-
-#     # extracts the number of nodes and number of delievery points
-#     num_nodes = file_content[1, 1]
-#     num_del_points = file_content[2, 1]
-
-#     #get number of rows in instance
-#     n= size(file_content, 1)
-
-#     #initialise arrays
-#     index_del_points = Array{Int64}(undef, num_del_points)
-#     arcs = Array{Float64}(undef, (n-3), 3)
-
-#     #fill the index points 
-#     for i in 1:num_del_points
-#         index_del_points[i] = file_content[3, i]
-#     end
-
-#     #fill the arcs 
-#     for i in 1:n-3
-#         for j in 1:3
-#             arcs[i, j] = file_content[3 + i, j]
-#         end
-#     end
-
-#     return num_nodes, num_del_points, index_del_points, arcs
-# end
-
-function read_instance(file_path)
-    open(file_path, "r") do f
-        n = parse(Int64, readline(f))
-        m = parse(Int64, readline(f))
-        delivery_points = parse.(Int64, split(readline(f)))
-        arcs = Vector{Vector{Int64}}()
-        costs = zeros(Float64, n, n)
-        while !eof(f)
-            linei = split(readline(f))
-            i  = parse(Int64, linei[1])
-            j  = parse(Int64, linei[2])
-            c  = parse(Float64, linei[3])
-            push!(arcs, [i,j])
-            costs[i, j] = c
-        end
-        
-        close(f)
-    return n, m, delivery_points, arcs, costs
-    end
-end
-
-#testing the task on this file
-file_path = "instances/inst_n-20_m-5_1.txt"
-test_file = read_instance(file_path)
-
-###################starting with task 1################################
-
-#getting the data needed in order to solve this constraint
-
-n, m, Q, arcs, costs = read_instance(file_path)
-#generating the data needed to solve the problem
-predecessors = Vector{Vector{Int64}}(undef,n)
-successors = Vector{Vector{Int64}}(undef, n)
-for i in 1:n
-    predecessors[i] = Vector{Int64}(undef, 0)
-    successors[i] = Vector{Int64}(undef, 0)
-end
-
-
-for arc in arcs
-    pre, suc = arc
-    push!(predecessors[suc], pre)
-    push!(successors[pre], suc)
-end
 
 function solve_ILP(n::Int64, Q::Vector{Int64}, arcs::Vector{Vector{Int64}}, pred::Vector{Vector{Int64}}, succ::Vector{Vector{Int64}}, costs::Matrix{Float64})
 
@@ -185,45 +109,10 @@ function connect_solution(model::Model, Q::Vector{Int64}, n::Int64, succ::Vector
     
     return(value.(model[:x]))
 end
+n, m, Q, arcs, costs = read_instance(string("instances/", "inst_n-20_m-5_1.txt"))
+predecessors, successors = create_pre_succesors(n, arcs)
 model = solve_ILP(n, Q, arcs, predecessors, successors, costs)
 
 println(Q)
 current_solution = connect_solution(model, Q, n, successors, arcs)
 
-
-#task 3
-#want to observe the average time used for the cutting plane which in this case is the connect solution method
-directory = "instances/"
-filenames = readdir(directory)
-filenames[1:10]
-
-total_time = 0.0
-function calc_comp_time_task1(instances::Vector{String} )
-    total_time = 0.0
-    for file in instances
-        n, m, Q, arcs, costs = read_instance(string(directory,file))
-        #generating the data needed to solve the problem
-        predecessors = Vector{Vector{Int64}}(undef,n)
-        successors = Vector{Vector{Int64}}(undef, n)
-        for i in 1:n
-            predecessors[i] = Vector{Int64}(undef, 0)
-            successors[i] = Vector{Int64}(undef, 0)
-        end
-
-
-        for arc in arcs
-            pre, suc = arc
-            push!(predecessors[suc], pre)
-            push!(successors[pre], suc)
-        end
-        model = solve_ILP(n, Q, arcs, predecessors, successors, costs)
-        t = @elapsed connect_solution(model, Q, n, successors, arcs)
-        total_time += t
-    end
-    return total_time / length(instances)
-end
-
-    
-avg_20_inst_task1 = calc_comp_time_task1(filenames[1:10])
-avg_35_inst_task1 = calc_comp_time_task1(filenames[11:20])
-avg_50_inst_task1 = calc_comp_time_task1(filenames[21:30])
