@@ -5,7 +5,7 @@ include("task1.jl")
 directory = "instances/"
 filenames = readdir(directory)
 
-total_time = 0.0
+### Average Time for task 1
 function calc_comp_time_task1(instances::Vector{String} )
     total_time = 0.0
     for file in instances
@@ -23,3 +23,24 @@ end
 avg_20_inst_task1 = calc_comp_time_task1(filenames[1:10])
 avg_35_inst_task1 = calc_comp_time_task1(filenames[11:20])
 avg_50_inst_task1 = calc_comp_time_task1(filenames[21:30])
+
+### average time for task 2
+function calc_comp_time_task2(instances::Vector{String} )
+    total_time = 0.0
+    for file in instances
+        n, m, Q, arcs, costs = read_instance(string(directory, file))
+        predecessors, successors = create_pre_succesors(n, arcs)
+        startLocation = Q[1]
+        G = Graph(n, successors, predecessors, costs)
+        d, shortestPaths = computeShortestPath(G, Q, m)
+        tsp = buildTSPmodel(m, d, startLocation)
+        t = @elapsed connectivityCutsAlgorithm(tsp, m, startLocation, Q, shortestPaths)
+        total_time += t
+    end
+    return total_time / length(instances)
+end
+
+    
+avg_20_inst_task1 = calc_comp_time_task2(filenames[1:10])
+avg_35_inst_task1 = calc_comp_time_task2(filenames[11:20])
+avg_50_inst_task1 = calc_comp_time_task2(filenames[21:30])
