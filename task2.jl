@@ -312,16 +312,6 @@ function connectivityCutsAlgorithm(model::Model, n::Int64, startLocation::Int64,
         end
     end
 
-    # display results
-    deliveryTour = Vector{Int64}(undef,0)
-
-    for node in sub[end]
-        
-        push!(deliveryTour, Q[node])
-        
-    end
-
-    println(deliveryTour)
     println("Total distance traveled: ", objective_value(model))
 end
 
