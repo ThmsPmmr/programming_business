@@ -33,10 +33,10 @@ function calc_comp_time_task2(instances::Vector{String} )
         predecessors, successors = create_pre_succesors(n, arcs)
         startLocation = Q[1]
         G = Graph(n, successors, predecessors, costs)
-        d, shortestPaths = computeShortestPath(G, Q, m)
-        tsp = buildTSPmodel(m, d, startLocation)
-        t = @elapsed connectivityCutsAlgorithm(tsp, m, startLocation, Q, shortestPaths)
-        total_time += t
+        t1 = @elapsed d = computeShortestPath(G, Q, m)
+        t2 = @elapsed tsp = buildTSPmodel(m, d, startLocation)
+        t3 = @elapsed connectivityCutsAlgorithm(tsp, m, startLocation, Q)
+        total_time += t1 + t2 + t3
     end
     return total_time / length(instances)
 end
