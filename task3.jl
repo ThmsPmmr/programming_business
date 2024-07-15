@@ -2,6 +2,7 @@
 #want to observe the average time used for the cutting plane which in this case is the connect solution method
 include("read_instance.jl")
 include("task1.jl")
+include("task2.jl")
 directory = "instances/"
 filenames = readdir(directory)
 

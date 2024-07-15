@@ -25,52 +25,36 @@ function solve_ILP(n::Int64, Q::Vector{Int64}, arcs::Vector{Vector{Int64}}, pred
 
     #optimize!(model)
 
-    # termination_status = JuMP.termination_status(model)
-    # println("Termination status: ", termination_status)
-
-    # if termination_status != MOI.OPTIMAL
-    #     println("The solver did not find an optimal solution.")
-    #     return nothing
-    # end
-    # print(objective_value(model))
   return model
 end
 
-
+#create a function which finds all nodes of the current subtours
+function find_connections(c::Int64, subtour::Vector{Int64}, visited::BitVector, x::Matrix{Float64})
+    push!(subtour, c)
+    visited[c] = true
+    for con in 1:n
+        if !visited[con] && value(x[c,con]) > 0.5
+            find_connections(con, subtour, visited, x)
+        end
+    end        
+end
 
 
 ###########find all tours
 
-function find_all_tours(x::Matrix{Float64}, arcs::Vector{Vector{Int64}}, n::Int64, Q::Vector{Int64})
-    #first create a matrix which is initialised with false for every element, this describes if an arc is used
-    used_arcs = falses(n,n)
-    #know we set all used arcs to true as this is what we need to get the subtours
-    for (i,j) in arcs
-        if value(x[i,j]) > 0.5
-            used_arcs[i,j] = true
-        end
-    end
-    #create a function which finds all nodes of the current subtours
-    function find_connections(c::Int64, subtour::Vector{Int64})
-        push!(subtour, c)
-        visited[c] = true
-        for con in 1:n
-            if !visited[con] && used_arcs[c,con]
-                find_connections(con, subtour)
-            end
-        end        
-    end
+function find_all_tours(x::Matrix{Float64}, n::Int64, Q::Vector{Int64})
+    
     #now lets look for the subtours we currently have
     all_components = Vector{Vector{Int64}}()
     visited = falses(n)
     #decided to only iterate through delievery points as there are no tours without a node of the delievery points as this would just increase costs
-    #but I if I would exactly look at the explanation of step 3 it would have to be 
+    #but I know if I would exactly look at the explanation of step 3 it would have to be 
     #for u in 1:n
     for u in Q
         if !visited[u] # && any(used_arcs[u, :]) - we would need this if we iterate from 1:n so that it is more efficient
             #for all locations with connections in the current solution we compute the subtours
             subtour = Vector{Int64}(undef,0)
-            find_connections(u, subtour)
+            find_connections(u, subtour, visited, x)
             push!(all_components, subtour)
         end
     end
@@ -90,7 +74,7 @@ function connect_solution(model::Model, Q::Vector{Int64}, n::Int64, succ::Vector
     
         xopt = value.(model[:x])
         #we need to find all current tours
-        all_tours = find_all_tours(xopt, arcs, n, Q)
+        all_tours = find_all_tours(xopt, n, Q)
 
         #now we either iterate through all subtours or until one subtour contains all delievery points
         for subtour in all_tours
