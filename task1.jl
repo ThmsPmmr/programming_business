@@ -23,8 +23,6 @@ function solve_ILP(n::Int64, Q::Vector{Int64}, arcs::Vector{Vector{Int64}}, pred
     # each location which has to be visited is visited at leaste once
     @constraint(model, [v in Q], sum(x[i, v] for i in pred[v]) >= 1)
 
-    #optimize!(model)
-
   return model
 end
 
@@ -64,8 +62,8 @@ end
 
 
 #now we need to connect the subtours to one tour which delievers all delievery points
-function connect_solution(model::Model, Q::Vector{Int64}, n::Int64, succ::Vector{Vector{Int64}}, arcs::Vector{Vector{Int64}})
-    #all_tours = Vector{Vector{Int64}}()
+function connect_solution(model::Model, Q::Vector{Int64}, n::Int64, succ::Vector{Vector{Int64}})
+    
     subtour_detected = true
     #as long as there is no tour which contains all delievery points we need to add connectivity cuts
     while subtour_detected
@@ -88,7 +86,7 @@ function connect_solution(model::Model, Q::Vector{Int64}, n::Int64, succ::Vector
         
     end
     #we again optimize the model to get the objective value and fullfill all constraints
-    optimize!(model)
+    #optimize!(model)
     println("Total travelling distance: ", objective_value(model))
     
     return(value.(model[:x]))
@@ -98,5 +96,5 @@ predecessors, successors = create_pre_succesors(n, arcs)
 model = solve_ILP(n, Q, arcs, predecessors, successors, costs)
 
 println(Q)
-current_solution = connect_solution(model, Q, n, successors, arcs)
+current_solution = connect_solution(model, Q, n, successors)
 
