@@ -26,22 +26,22 @@ function solve_ILP(n::Int64, Q::Vector{Int64}, arcs::Vector{Vector{Int64}}, pred
   return model
 end
 
-#create a function which finds all nodes of the current subtours
-function find_connections(c::Int64, subtour::Vector{Int64}, visited::BitVector, x::Matrix{Float64})
-    push!(subtour, c)
-    visited[c] = true
-    for con in 1:n
-        if !visited[con] && value(x[c,con]) > 0.5
-            find_connections(con, subtour, visited, x)
-        end
-    end        
-end
+
 
 
 ###########find all tours
 
 function find_all_tours(x::Matrix{Float64}, n::Int64, Q::Vector{Int64})
-    
+    #create a function which finds all nodes of the current subtours
+    function find_connections(c::Int64, subtour::Vector{Int64}, visited::BitVector, x::Matrix{Float64})
+        push!(subtour, c)
+        visited[c] = true
+        for con in 1:n
+            if !visited[con] && value(x[c,con]) > 0.5
+                find_connections(con, subtour, visited, x)
+            end
+        end        
+    end
     #now lets look for the subtours we currently have
     all_components = Vector{Vector{Int64}}()
     visited = falses(n)
@@ -89,12 +89,12 @@ function connect_solution(model::Model, Q::Vector{Int64}, n::Int64, succ::Vector
     #optimize!(model)
     println("Total travelling distance: ", objective_value(model))
     
-    return(value.(model[:x]))
+    #return(value.(model[:x]))
 end
-n, m, Q, arcs, costs = read_instance(string("instances/", "inst_n-20_m-5_1.txt"))
-predecessors, successors = create_pre_succesors(n, arcs)
-model = solve_ILP(n, Q, arcs, predecessors, successors, costs)
+# n, m, Q, arcs, costs = read_instance(string("instances/", "inst_n-20_m-5_1.txt"))
+# predecessors, successors = create_pre_succesors(n, arcs)
+# model = solve_ILP(n, Q, arcs, predecessors, successors, costs)
 
-println(Q)
-current_solution = connect_solution(model, Q, n, successors)
+# println(Q)
+# current_solution = connect_solution(model, Q, n, successors)
 
