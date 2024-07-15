@@ -1,4 +1,4 @@
-using Random
+
 using DelimitedFiles
 
 function read_instance(file_path)
