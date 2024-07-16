@@ -1,6 +1,3 @@
-# Hardcode für die gegebenen Daten
-using Random
-using DelimitedFiles
 using CPLEX
 using JuMP
 
