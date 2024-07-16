@@ -1,6 +1,3 @@
-# Hardcode für die gegebenen Daten
-using Random
-using DelimitedFiles
 using CPLEX
 using JuMP
 
@@ -293,7 +290,7 @@ end
 # - startLocation: location where the tour starts
 # - n: number of delivery locations
 # ###################################################################################################
-function connectivityCutsAlgorithm(model::Model, n::Int64, startLocation::Int64, Q::Vector, shortestPaths)
+function connectivityCutsAlgorithm(model::Model, n::Int64, startLocation::Int64, Q::Vector, shortestPaths::Vector)
     # List to store all subtours
     sub = []
     # Flag to indicate whether subtours are detected
